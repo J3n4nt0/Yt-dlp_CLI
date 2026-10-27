@@ -31,8 +31,8 @@ readonly SYM_DONE="■"
 
 # ── Defaults ─────────────────────────────────────────────────────────────
 readonly DEFAULT_HEIGHT=250
-readonly DEFAULT_OUTPUT_DIR="/sdcard/.Movie/"
-readonly FAILED_LOG="$HOME/bash/p/list/failed.txt"
+readonly DEFAULT_OUTPUT_DIR="media"
+readonly FAILED_LOG="logs/failed.txt"
 
 file_list=""
 quality="$DEFAULT_HEIGHT"
@@ -108,6 +108,29 @@ download_one() {
     fi
 }
 
+download_url(){
+    local url="$1"
+    local height="$2"    
+
+    if yt-dlp -c \
+        -f "[height<=${height}]+[height<=${height}]" \
+        -P "$output_dir" \
+        --progress \
+        --quiet \
+        --no-warnings \
+        --progress-template $'\033[1;34m  \xe2\x80\xba\033[0m %(progress._percent_str)s  %(progress._total_bytes_estimate_str)s  %(progress._speed_str)s  ETA %(progress._eta_str)s' \
+        "$url"
+    then
+        echo -e "  ${C_GREEN}${SYM_OK} Done${C_RESET}\n"
+        return 0
+    else
+        log_failed_url "$url"
+        echo -e "  ${C_YELLOW}${SYM_WARN} Failed — logged to ${FAILED_LOG}${C_RESET}\n"
+        return 1
+    fi
+
+}
+
 run_queue() {
     local height="$1"
     local total ok=0 fail=0 index=0
@@ -148,6 +171,10 @@ while [ $# -gt 0 ]; do
             output_dir="${2:-}"
             shift 2
             ;;
+	--url|-u)
+	    url="${2:-}"
+	    shift 2
+	    ;;
         --help|-h)
             usage
             ;;
@@ -158,8 +185,7 @@ while [ $# -gt 0 ]; do
 done
 
 # ── Validation ───────────────────────────────────────────────────────────
-[ -z "$file_list" ] && usage
-[ -f "$file_list" ] || die "File '$file_list' not found"
+[[ -z "${file_list}" && -z "${url:-}" ]] && usage
 
 case "$quality" in
     ''|*[!0-9]*) die "Invalid --quality value: '$quality' (must be a number)" ;;
@@ -168,4 +194,9 @@ esac
 mkdir -p "$output_dir" 2>/dev/null || die "Cannot create/access output directory: '$output_dir'"
 
 # ── Main ─────────────────────────────────────────────────────────────────
-run_queue "$quality"
+
+if [ -z "${url:-}" ];then
+    run_queue "$quality"
+else
+    download_url "$url" "$quality"
+fi
